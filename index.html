@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Football Crisis Radar</title>
+    <style>
+        :root {
+            --bg-color: #121214;
+            --card-bg: #202024;
+            --border-color: #323238;
+            --text-color: #e1e1e6;
+            --text-muted: #8d8d99;
+            --accent-alert: #f75a68;
+            --accent-ok: #00b37e;
+            --accent-link: #4ea8de;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 15px;
+            padding-bottom: 50px;
+        }
+
+        header {
+            margin-bottom: 20px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            color: var(--accent-alert);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        header p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .team-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-bottom: 12px;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+
+        .team-header {
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .badge-alert {
+            background-color: rgba(247, 90, 104, 0.2);
+            color: var(--accent-alert);
+            border: 1px solid var(--accent-alert);
+        }
+
+        .badge-ok {
+            background-color: rgba(0, 179, 126, 0.2);
+            color: var(--accent-ok);
+            border: 1px solid var(--accent-ok);
+        }
+
+        .team-details {
+            display: none;
+            padding: 15px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .news-item {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .news-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .news-item:first-child {
+            padding-top: 0;
+        }
+
+        .news-title {
+            font-size: 0.95rem;
+            font-weight: 500;
+            line-height: 1.4;
+            margin-bottom: 6px;
+        }
+
+        .news-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .btn-link {
+            color: var(--accent-link);
+            text-decoration: none;
+            font-weight: bold;
+            border: 1px solid var(--accent-link);
+            padding: 3px 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .btn-link:hover {
+            background-color: var(--accent-link);
+            color: #fff;
+        }
+
+        .no-news {
+            text-align: center;
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 0.9rem;
+            padding: 10px 0;
+        }
+
+        .error-box {
+            background-color: rgba(247, 90, 104, 0.1);
+            border: 1px solid var(--accent-alert);
+            color: var(--accent-alert);
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Football Crisis Radar</h1>
+        <p>One-Click Team Info & Financial Alerts</p>
+    </header>
+
+    <div class="container" id="radar-container">
+        <p style="text-align: center; color: var(--text-muted);">Loading crisis report...</p>
+    </div>
+
+    <script>
+        async function loadCrisisReport() {
+            const container = document.getElementById('radar-container');
+            try {
+                // Prevents browser cache issues
+                const cacheBuster = new Date().getTime();
+                const response = await fetch(`crisis_report.json?v=${cacheBuster}`);
+                
+                if (!response.ok) {
+                    throw new Error("Missing json file");
+                }
+                
+                const data = await response.json();
+                renderDashboard(data);
+            } catch (error) {
+                console.error("Error loading data:", error);
+                container.innerHTML = `
+                    <div class="error-box">
+                        Failed to load 'crisis_report.json'. <br>
+                        Make sure the GitHub Action has executed successfully.
+                    </div>
+                `;
+            }
+        }
+
+        function renderDashboard(reportData) {
+            const container = document.getElementById('radar-container');
+            container.innerHTML = "";
+
+            const teams = Object.keys(reportData);
+            
+            if (teams.length === 0) {
+                container.innerHTML = "<p class='no-news'>No teams monitored at the moment.</p>";
+                return;
+            }
+
+            teams.forEach(teamName => {
+                const newsList = reportData[teamName] || [];
+                const hasAlerts = newsList.length > 0;
+                
+                const card = document.createElement('div');
+                card.className = 'team-card';
+                
+                // Set custom badge based on findings
+                const badgeHtml = hasAlerts 
+                    ? `<span class="badge badge-alert">${newsList.length} ALERTS</span>`
+                    : `<span class="badge badge-ok">CLEAN</span>`;
+
+                card.innerHTML = `
+                    <div class="team-header" onclick="toggleCardDetails('${teamName}')">
+                        <span>${teamName}</span>
+                        ${badgeHtml}
+                    </div>
+                    <div class="team-details" id="details-${sanitizeId(teamName)}">
+                        ${renderNewsItems(newsList)}
+                    </div>
+                `;
+                
+                container.appendChild(card);
+            });
+        }
+
+        function renderNewsItems(newsList) {
+            if (newsList.length === 0) {
+                return `<p class="no-news">No critical issues or strikes found in recent Google News records.</p>`;
+            }
+
+            return newsList.map(item => {
+                // Format date string to keep it short
+                let shortDate = item.date;
+                try {
+                    const parsedDate = new Date(item.date);
+                    shortDate = parsedDate.toLocaleDateString('it-IT', {day: '2-digit', month: '2-digit'});
+                } catch(e) {}
+
+                return `
+                    <div class="news-item">
+                        <div class="news-title">${item.title}</div>
+                        <div class="news-meta">
+                            <span>Published: ${shortDate}</span>
+                            <a href="${item.link}" target="_blank" class="btn-link">Read Article</a>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleCardDetails(teamName) {
+            const id = sanitizeId(teamName);
+            const target = document.getElementById(`details-${id}`);
+            if (target.style.display === "block") {
+                target.style.display = "none";
+            } else {
+                target.style.display = "block";
+            }
+        }
+
+        function sanitizeId(string) {
+            // Removes spaces and weird characters to safely use as HTML ID attribute
+            return string.replace(/[^a-zA-Z0-9]/g, '_');
+        }
+
+        // Initialize dashboard
+        loadCrisisReport();
+    </script>
+</body>
+</html>
