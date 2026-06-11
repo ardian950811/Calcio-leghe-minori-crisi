@@ -2,10 +2,10 @@ name: Football Crisis Radar Scraper
 
 on:
   schedule:
-    # Gira ogni giorno alle 07:00 UTC (alle 09:00 italiane d'estate)
-    - cron: '0 7 * * *'
+    # Runs at minute 0 past every hour
+    - cron: '0 * * * *'
   workflow_dispatch:
-    # Questo ti permette di farlo partire a mano quando vuoi con un click
+    # Allows manual trigger
 
 jobs:
   run-scrp:
