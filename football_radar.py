@@ -59,7 +59,6 @@ def search_team_crisis_news(team_name, country_context="global"):
 
 def main_investigation():
     # TEST LIST: Put the teams you want to check manually here
-    # You can specify the language context to refine keywords (spanish, french, english, global)
     teams_to_search = [
         {"name": "Chacarita Juniors", "context": "spanish"},
         {"name": "Gor Mahia", "context": "english"},
@@ -76,7 +75,7 @@ def main_investigation():
         report_results[name] = critical_news
         time.sleep(2) # Polite delay between requests
         
-    # Save the findings to a JSON file for your web dashboard
+    # Save the findings to a JSON file for the web dashboard
     with open("crisis_report.json", "w", encoding="utf-8") as f:
         json.dump(report_results, f, indent=4)
         
