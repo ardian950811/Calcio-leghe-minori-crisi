@@ -4,6 +4,7 @@ import urllib.parse
 import json
 import time
 import os
+import re
 from datetime import datetime, timedelta
 import email.utils
 
@@ -22,23 +23,42 @@ def send_telegram_message(token, chat_id, text):
         print(f"Failed to send Telegram message: {e}")
 
 def load_teams_from_website():
-    """Load teams pasted from the HTML website input"""
+    """Load and clean teams pasted directly from AiScore format"""
     teams = []
-    # This grabs the text you pasted on the website
     raw_input = os.environ.get("TEAMS_INPUT", "") 
     
     if not raw_input:
         print("No teams received from the website.")
         return teams
         
-    for line in raw_input.split('\n'):
-        name = line.strip()
-        if name:
-            # We use 'global' context as default for pasted schedules
-            teams.append({"name": name, "context": "global"})
+    lines = raw_input.split('\n')
+    for line in lines:
+        line = line.strip()
+        
+        # 1. Skip completely empty lines
+        if not line:
+            continue
             
-    print(f"Loaded {len(teams)} teams from website input.")
-    return teams
+        # 2. Skip time formats (e.g., 14:30, 85', HT, FT, Canc, Pen)
+        if re.match(r'^(\d{1,2}:\d{2}|\d{1,3}\'|HT|FT|Canc|Postp|Pen|AET)$', line, re.IGNORECASE):
+            continue
+            
+        # 3. Skip scores or odds (e.g., 0 - 0, 1-2, 1.50, +1)
+        if re.match(r'^(\d+\s*-\s*\d+|\d+\.\d+|\+\d+)$', line):
+            continue
+            
+        # 4. Skip single characters or common separators
+        if len(line) <= 2 and line.upper() in ['V', '-', 'X', '1', '2', 'VS']:
+            continue
+            
+        # If it survives the filters, it's a team name
+        teams.append({"name": line, "context": "global"})
+        
+    # Remove duplicates
+    unique_teams = [dict(t) for t in {tuple(d.items()) for d in teams}]
+    
+    print(f"Extracted {len(unique_teams)} clean team names from raw input.")
+    return unique_teams
 
 def search_team_google_news(team_name, country_context="global"):
     print(f"Scanning Google News RSS (last 48h) for: {team_name}...")
@@ -46,7 +66,7 @@ def search_team_google_news(team_name, country_context="global"):
     rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
     
     headers = {"User-Agent": "Mozilla/5.0"}
-    keywords = ['strike', 'salary', 'unpaid', 'injury', 'huelga', 'sueldos', 'grève', 'juveniles', 'youth team', 'reserves', 'absences', 'lesion', 'bajas']
+    keywords = ['strike', 'salary', 'unpaid', 'injury', 'huelga', 'sueldos', 'grève', 'juveniles', 'youth team', 'reserves', 'absences', 'lesion', 'bajas', 'crise']
     
     all_team_news = []
     crisis_alerts = []
@@ -86,7 +106,6 @@ def main_investigation():
     telegram_token = os.environ.get("TELEGRAM_TOKEN")
     telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     
-    # LOAD FROM WEBSITE INPUT
     teams_to_search = load_teams_from_website()
     
     if not teams_to_search:
