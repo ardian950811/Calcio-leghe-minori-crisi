@@ -34,7 +34,8 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TEAMS_INPUT: ${{ github.event.inputs.teams_list }}
+          # Corretto da TEAMS_INPUT a TEAMS_LIST per farlo combaciare con Python
+          TEAMS_LIST: ${{ github.event.inputs.teams_list }}
         run: python football_radar.py
 
       - name: Commit and push updated files
