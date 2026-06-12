@@ -1,30 +1,147 @@
-<!-- ... (parte iniziale invariata) ... -->
-<script>
-// ... (funzione triggerGitHubAction invariata) ...
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Football Crisis Radar</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #1e1e1e; color: white; padding: 20px; }
+        .panel { background-color: #2c2f33; padding: 20px; border-radius: 8px; margin-bottom: 20px; max-width: 800px; margin: auto; }
+        textarea, input { width: 100%; margin-bottom: 15px; padding: 10px; border-radius: 4px; border: 1px solid #555; background-color: #222; color: white; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; padding: 12px 20px; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; margin-bottom: 15px; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        button:hover:not(:disabled) { background-color: #45a049; }
+        #actionStatus { margin-top: 15px; font-weight: bold; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
+        th, td { padding: 12px; border: 1px solid #444; text-align: left; }
+        th { background-color: #444; }
+        tr:nth-child(even) { background-color: #333; }
+        a { color: #4CAF50; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
 
-function updateTable(data) {
-    const tbody = document.getElementById('table_body');
-    const events = data.events; // Ora leggiamo dall'oggetto events
-    tbody.innerHTML = ''; 
+    <div class="panel">
+        <h2>Radar Control Panel</h2>
+        <p>Incolla qui il palinsesto di AiScore:</p>
+        <textarea id="teamsInput" rows="8" placeholder="Copia l'elenco e incolla qui..."></textarea>
+        
+        <p>Token GitHub (Password):</p>
+        <input type="password" id="githubToken" placeholder="Incolla il tuo Personal Access Token">
+        
+        <button id="analyze_btn" onclick="triggerGitHubAction()">Avvia Radar</button>
+        <div id="actionStatus"></div>
 
-    // Visualizzazione del log temporale
-    const statusDiv = document.getElementById('actionStatus');
-    statusDiv.innerHTML = `<small>Ultima scansione: ${data.last_check}</small>`;
+        <h3 style="margin-top: 30px; border-bottom: 1px solid #555; padding-bottom: 10px;">Risultati Radar</h3>
+        <table id="results_table">
+            <thead>
+                <tr>
+                    <th>Squadra</th>
+                    <th>Allarme</th>
+                    <th>Notizia (Clicca per leggere)</th>
+                </tr>
+            </thead>
+            <tbody id="table_body">
+                <tr>
+                    <td colspan="3" style="text-align: center; color: #aaa;">In attesa di dati...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 
-    if(events.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #4CAF50;">✅ Nessuna crisi rilevata. Sistema operativo.</td></tr>';
-        return;
+    <script>
+    const githubUser = "ardian950811";
+    const repoName = "Calcio-leghe-minori-crisi";
+    const workflowId = "football_workflow.yml";
+
+    async function triggerGitHubAction() {
+        const teamsList = document.getElementById('teamsInput').value;
+        const token = document.getElementById('githubToken').value;
+        const statusText = document.getElementById('actionStatus');
+        const button = document.getElementById('analyze_btn');
+        
+        if (!teamsList || !token) {
+            statusText.innerHTML = "<span style='color: #ff4d4d;'>Errore: Inserisci le squadre e il Token.</span>";
+            return;
+        }
+
+        button.disabled = true;
+        statusText.innerHTML = "<span style='color: orange;'>Avvio investigazione in corso su GitHub... Attendi circa 1 minuto.</span>";
+
+        const apiUrl = `https://api.github.com/repos/${githubUser}/${repoName}/actions/workflows/${workflowId}/dispatches`;
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: "POST",
+                headers: {
+                    "Accept": "application/vnd.github.v3+json",
+                    "Authorization": `token ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    ref: "main",
+                    inputs: { teams_list: teamsList }
+                })
+            });
+
+            if (response.ok || response.status === 204) {
+                statusText.innerHTML = "<span style='color: lightgreen;'>Radar avviato con successo! Recupero dei risultati...</span>";
+                document.getElementById('teamsInput').value = ""; 
+                // Aspetta 45 secondi e poi cerca i risultati
+                setTimeout(fetchResults, 45000);
+            } else {
+                throw new Error("Errore API");
+            }
+        } catch (error) {
+            statusText.innerHTML = "<span style='color: #ff4d4d;'>Errore: Controlla il Token o la connessione.</span>";
+            button.disabled = false;
+        }
     }
 
-    events.forEach(item => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td><strong>${item.team}</strong></td>
-            <td><span style="color: red;">${item.keyword.toUpperCase()}</span></td>
-            <td><a href="${item.link}" target="_blank" style="color:white;">${item.title}</a></td>
-        `;
-        tbody.appendChild(row);
-    });
-}
-</script>
-<!-- ... (resto dell'HTML invariato) ... -->
+    async function fetchResults() {
+        const statusText = document.getElementById('actionStatus');
+        const button = document.getElementById('analyze_btn');
+        
+        const timestamp = new Date().getTime(); // Evita la cache
+        const rawUrl = `https://raw.githubusercontent.com/${githubUser}/${repoName}/main/crisis_report.json?t=${timestamp}`;
+
+        try {
+            const response = await fetch(rawUrl);
+            if (!response.ok) throw new Error("JSON non pronto");
+            
+            const data = await response.json();
+            updateTable(data);
+            button.disabled = false;
+        } catch (error) {
+            statusText.innerHTML = "<span style='color: orange;'>Analisi ancora in corso... Riprovo tra 10 secondi.</span>";
+            setTimeout(fetchResults, 10000);
+        }
+    }
+
+    function updateTable(data) {
+        const tbody = document.getElementById('table_body');
+        const events = data.events || []; 
+        tbody.innerHTML = ''; 
+
+        const statusDiv = document.getElementById('actionStatus');
+        statusDiv.innerHTML = `<span style="color: lightgreen;">Analisi completata! Ultima scansione: ${data.last_check || 'Sconosciuta'}</span>`;
+
+        if(events.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #4CAF50;">✅ Nessuna crisi rilevata. Sistema pulito.</td></tr>';
+            return;
+        }
+
+        events.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${item.team}</strong></td>
+                <td><span style="color: #ff4d4d; font-weight: bold;">${item.keyword.toUpperCase()}</span></td>
+                <td><a href="${item.link}" target="_blank">${item.title}</a></td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+    </script>
+</body>
+</html>
