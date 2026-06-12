@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Football Crisis Radar</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #1e1e1e; color: white; padding: 20px; }
+        .panel { background-color: #2c2f33; padding: 20px; border-radius: 8px; margin-bottom: 20px; max-width: 600px; }
+        textarea, input { width: 100%; margin-bottom: 15px; padding: 10px; border-radius: 4px; border: 1px solid #555; background-color: #222; color: white; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; padding: 12px 20px; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; }
+        button:hover { background-color: #45a049; }
+        #actionStatus { margin-top: 15px; font-weight: bold; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <h2>Radar Control Panel</h2>
+        <p>Incolla qui il palinsesto di AiScore:</p>
+        <textarea id="teamsInput" rows="10" placeholder="Copia l'elenco da AiScore e incolla qui... il sistema eliminerà da solo orari e risultati."></textarea>
+        
+        <p>Token GitHub (Password):</p>
+        <input type="password" id="githubToken" placeholder="Incolla il tuo Personal Access Token">
+        
+        <button onclick="triggerGitHubAction()">Avvia Radar</button>
+        <p id="actionStatus"></p>
+    </div>
+
+    <script>
+    function triggerGitHubAction() {
+        const teamsList = document.getElementById('teamsInput').value;
+        const token = document.getElementById('githubToken').value;
+        const statusText = document.getElementById('actionStatus');
+        
+        if (!teamsList || !token) {
+            statusText.innerText = "Errore: Inserisci le squadre e il Token.";
+            statusText.style.color = "#ff4d4d";
+            return;
+        }
+
+        statusText.innerText = "Avvio investigazione in corso...";
+        statusText.style.color = "orange";
+
+        const githubUser = "ardian950811";
+        const repoName = "Calcio-leghe-minori-crisi";
+        const workflowId = "football_workflow.yml";
+
+        const apiUrl = `https://api.github.com/repos/${githubUser}/${repoName}/actions/workflows/${workflowId}/dispatches`;
+
+        fetch(apiUrl, {
+            method: "POST",
+            headers: {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": `token ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                ref: "main",
+                inputs: {
+                    teams_list: teamsList
+                }
+            })
+        })
+        .then(response => {
+            if (response.ok) {
+                statusText.innerText = "Successo! Il bot sta scansionando. Controlla Telegram.";
+                statusText.style.color = "lightgreen";
+                document.getElementById('teamsInput').value = ""; 
+            } else {
+                statusText.innerText = "Errore: Controlla il Token o il nome della Repository.";
+                statusText.style.color = "#ff4d4d";
+            }
+        })
+        .catch(error => {
+            statusText.innerText = "Errore di rete.";
+            statusText.style.color = "#ff4d4d";
+        });
+    }
+    </script>
+</body>
+</html>
