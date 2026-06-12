@@ -1,141 +1,196 @@
-import requests
-from bs4 import BeautifulSoup
-import urllib.parse
-import json
-import time
 import os
-import re
+import sys
+import json
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
-import email.utils
+import time
 
-def send_telegram_message(token, chat_id, text):
-    """Send push notification via Telegram"""
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": False
-    }
-    try:
-        requests.post(url, json=payload, timeout=10)
-    except Exception as e:
-        print(f"Failed to send Telegram message: {e}")
+def log_info(message):
+    print(f"[*] {message}")
 
-def load_teams_from_website():
-    """Load and clean teams pasted directly from AiScore format"""
-    teams = []
-    raw_input = os.environ.get("TEAMS_INPUT", "") 
-    
-    if not raw_input:
-        print("No teams received from the website.")
-        return teams
-        
+def log_success(message):
+    print(f"[+] SUCCESS: {message}")
+
+def log_warning(message):
+    print(f"[-] WARNING: {message}")
+
+def clean_teams_list(raw_input):
+    log_info("Inizio pulizia del testo incollato da AiScore...")
     lines = raw_input.split('\n')
+    cleaned_teams = set()
+    
+    # Parole da scartare assolutamente per evitare falsi positivi
+    trash_keywords = [
+        'contattaci', 'termini del servizio', 'informativa sulla privacy', 
+        'copyright', 'onescore', 'gamble responsibly', 'sports data provider',
+        'vs', 'live', 'lineups', 'standings', 'odds', 'risultati', 'orari'
+    ]
+    
     for line in lines:
-        line = line.strip()
+        line_clean = line.strip()
+        if not line_clean:
+            continue
+            
+        # Salta i numeri isolati (orari, punteggi, date)
+        if line_clean.isdigit():
+            continue
+            
+        # Salta i minuti di gioco (es. 45', 90'+3)
+        if "'" in line_clean:
+            continue
+            
+        # Salta la spazzatura del footer o del layout
+        if any(trash in line_clean.lower() for trash in trash_keywords):
+            continue
+            
+        # Se supera i controlli, è una squadra valida
+        cleaned_teams.add(line_clean)
         
-        # 1. Skip completely empty lines
-        if not line:
-            continue
-            
-        # 2. Skip time formats (e.g., 14:30, 85', HT, FT, Canc, Pen)
-        if re.match(r'^(\d{1,2}:\d{2}|\d{1,3}\'|HT|FT|Canc|Postp|Pen|AET)$', line, re.IGNORECASE):
-            continue
-            
-        # 3. Skip scores or odds (e.g., 0 - 0, 1-2, 1.50, +1)
-        if re.match(r'^(\d+\s*-\s*\d+|\d+\.\d+|\+\d+)$', line):
-            continue
-            
-        # 4. Skip single characters or common separators
-        if len(line) <= 2 and line.upper() in ['V', '-', 'X', '1', '2', 'VS']:
-            continue
-            
-        # If it survives the filters, it's a team name
-        teams.append({"name": line, "context": "global"})
-        
-    # Remove duplicates
-    unique_teams = [dict(t) for t in {tuple(d.items()) for d in teams}]
-    
-    print(f"Extracted {len(unique_teams)} clean team names from raw input.")
-    return unique_teams
+    lista_finale = sorted(list(cleaned_teams))
+    log_success(f"Pulizia completata. Rilevate {len(lista_finale)} squadre uniche da scansionare.")
+    return lista_finale
 
-def search_team_google_news(team_name, country_context="global"):
-    print(f"Scanning Google News RSS (last 48h) for: {team_name}...")
-    encoded_query = urllib.parse.quote(f'"{team_name}"')
-    rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
+def fetch_rss_news(query, engine="google"):
+    encoded_query = urllib.parse.quote(f'"{query}"')
     
-    headers = {"User-Agent": "Mozilla/5.0"}
-    keywords = ['strike', 'salary', 'unpaid', 'injury', 'huelga', 'sueldos', 'grève', 'juveniles', 'youth team', 'reserves', 'absences', 'lesion', 'bajas', 'crise']
-    
-    all_team_news = []
-    crisis_alerts = []
-    time_limit = datetime.now() - timedelta(hours=48)
+    if engine == "google":
+        url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
+    elif engine == "yahoo":
+        url = f"https://news.yahoo.com/rss/search?p={encoded_query}"
+    else:
+        return []
+
+    req = urllib.request.Request(
+        url, 
+        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    )
     
     try:
-        response = requests.get(rss_url, headers=headers, timeout=15)
-        soup = BeautifulSoup(response.content, features="xml")
-        items = soup.find_all('item')
-        
-        for item in items:
-            title = item.title.text
-            link = item.link.text
-            pub_date_str = item.pubDate.text
-            
-            try:
-                parsed_date = email.utils.parsedate_to_datetime(pub_date_str).replace(tzinfo=None)
-            except:
-                parsed_date = datetime.now()
-
-            if parsed_date < time_limit:
-                continue
-                
-            news_data = {"title": title, "link": link, "date": pub_date_str, "is_crisis": False}
-            
-            if any(kw in title.lower() for kw in keywords):
-                news_data["is_crisis"] = True
-                crisis_alerts.append(news_data)
-                
-            all_team_news.append(news_data)
+        with urllib.request.urlopen(req, timeout=10) as response:
+            html = response.read()
+            root = ET.fromstring(html)
+            articles = []
+            for item in root.findall('.//item'):
+                title = item.find('title').text if item.find('title') is not None else ""
+                link = item.find('link').text if item.find('link') is not None else ""
+                pub_date = item.find('pubDate').text if item.find('pubDate') is not None else ""
+                articles.append({'title': title, 'link': link, 'pubDate': pub_date})
+            return articles
     except Exception as e:
-        print(f"Error fetching data: {e}")
-        
-    return all_team_news, crisis_alerts
+        return []
 
-def main_investigation():
-    telegram_token = os.environ.get("TELEGRAM_TOKEN")
-    telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+def scan_football_radar():
+    # Recupera i dati passati dall'interfaccia web
+    raw_teams = os.environ.get("TEAMS_LIST", "")
+    telegram_token = os.environ.get("TELEGRAM_TOKEN", "")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
     
-    teams_to_search = load_teams_from_website()
+    if not raw_teams:
+        log_warning("Nessuna squadra ricevuta dall'interfaccia web. Esco.")
+        sys.exit(0)
+        
+    teams = clean_teams_list(raw_teams)
     
-    if not teams_to_search:
-        return
-        
-    report_results = {}
-    new_alerts_detected = []
+    # 4 GIORNI DI FINESTRA TEMPORALE (96 ore)
+    days_back = 4
+    time_threshold = datetime.now() - timedelta(days=days_back)
+    log_info(f"Finestra di scansione impostata a: {days_back} giorni (Notizie dal {time_threshold.strftime('%d/%m/%Y')} ad oggi).")
     
-    for team in teams_to_search:
-        name = team["name"]
-        all_news, crisis_news = search_team_google_news(name, team["context"])
+    # Vocabolario potenziato in 4 lingue
+    keywords = [
+        # --- ITALIANO ---
+        'sciopero', 'stipendi', 'crisi finanziaria', 'giovani', 'riserves', 'formazione rimaneggiata', 
+        'schiererà i giovani', 'spazio alle riserve', 'rosa ridotta', 'infortuni masivi', 'ammutinamento',
+        # --- INGLESE ---
+        'strike', 'salary', 'unpaid', 'injury', 'unpaid wages', 'boycott', 'financial crisis', 
+        'bankruptcy', 'youth squad', 'reserves', 'injury crisis', 'missing players', 'match-fixing', 
+        'walkout', 'sidelined', 'scandal', 'will play with reserves', 'forced to play youth', 
+        'depleted squad', 'academy players', 'second team', 'b-team', 'under-20',
+        # --- SPAGNOLO ---
+        'huelga', 'sueldos', 'impagos', 'deudas', 'paro', 'boicot', 'crisis económica', 'quiebra', 
+        'juveniles', 'bajas masivas', 'lesiones', 'ausencias', 'suspendidos', 'amaño', 'jugará con suplentes', 
+        'obligado a jugar con juveniles', 'plantel diezmado', 'reservas', 'equipo alternativo', 
+        'canteranos', 'sub-20', 'equipo de emergencia',
+        # --- PORTOGHESE ---
+        'greve', 'salários atrasados', 'calote', 'crise financeira', 'desfalques', 'time sub-20', 
+        'lesões', 'suspensos', 'manipulação', 'W.O.', 'jogará com reservas', 'forçado a usar a base', 
+        'elenco reduzido', 'time alternativo', 'garotos da base',
+        # --- FRANCESE ---
+        'grève', 'salaires impayés', 'crise financière', 'dettes', 'forfaits', 'hécatombe', 
+        'blessures', 'équipe de jeunes', 'suspendus', 'jouera con les réservistes', 'aligner les jeunes', 
+        'effectif réduit', 'équipe réserve', 'équipe b'
+    ]
+    
+    crisis_database = []
+    
+    for idx, team in enumerate(teams, 1):
+        log_info(f"[{idx}/{len(teams)}] Scansione in corso per: {team}")
         
-        if all_news:
-            report_results[name] = all_news
+        # Cerca su Google News e Yahoo News
+        google_news = fetch_rss_news(team, "google")
+        yahoo_news = fetch_rss_news(team, "yahoo")
+        all_news = google_news + yahoo_news
         
-        if crisis_news:
-            for news in crisis_news:
-                new_alerts_detected.append(
-                    f"🚨 <b>CRISIS DETECTED: {name}</b>\n📰 {news['title']}\n🔗 <a href='{news['link']}'>Read Article</a>\n"
-                )
-        time.sleep(3) 
+        team_alerts = []
         
-    with open("crisis_report.json", "w", encoding="utf-8") as f:
-        json.dump(report_results, f, indent=4)
+        for article in all_news:
+            title_lower = article['title'].lower()
+            
+            # Controllo parole chiave di emergenza
+            triggered_keyword = next((kw for kw in keywords if kw in title_lower), None)
+            
+            if triggered_keyword:
+                # Verifica la data della notizia
+                try:
+                    # Formato standard dei feed RSS: "Fri, 12 Jun 2026 08:00:00 GMT"
+                    pub_date_clean = article['pubDate'].split(',')[1].split('GMT')[0].strip()
+                    parsed_date = datetime.strptime(pub_date_clean, "%d %b %Y %H:%M:%S")
+                except:
+                    parsed_date = datetime.now() # Se la data fallisce, la prende per buona per sicurezza
+                
+                if parsed_date >= time_threshold:
+                    alert_data = {
+                        'team': team,
+                        'title': article['title'],
+                        'link': article['link'],
+                        'keyword_detected': triggered_keyword,
+                        'date': parsed_date.strftime('%Y-%m-%d %H:%M')
+                    }
+                    if alert_data not in team_alerts:
+                        team_alerts.append(alert_data)
         
-    if new_alerts_detected and telegram_token and telegram_chat_id:
-        for i in range(0, len(new_alerts_detected), 5):
-            chunk = new_alerts_detected[i:i+5]
-            send_telegram_message(telegram_token, telegram_chat_id, "\n".join(chunk))
-            time.sleep(2)
+        if team_alerts:
+            log_success(f"🚨 TROVATA CRISI per {team}! {len(team_alerts)} notizie sospette rilevate.")
+            crisis_database.extend(team_alerts)
+            
+            # Invia notifica immediata a Telegram per questa squadra
+            if telegram_token and chat_id:
+                for alert in team_alerts:
+                    msg = (
+                        f"🚨 *FOOTBALL CRISIS RADAR* 🚨\n\n"
+                        f"⚽️ *Squadra:* {alert['team']}\n"
+                        f"⚠️ *Anomalia:* {alert['keyword_detected'].upper()}\n"
+                        f"📰 *Notizia:* {alert['title']}\n"
+                        f"📅 *Data:* {alert['date']}\n\n"
+                        f"🔗 [Leggi la fonte locale]({alert['link']})"
+                    )
+                    encoded_msg = urllib.parse.quote(msg)
+                    telegram_url = f"https://api.telegram.org/bot{telegram_token}/sendMessage?chat_id={chat_id}&text={encoded_msg}&parse_mode=Markdown"
+                    try:
+                        urllib.request.urlopen(telegram_url, timeout=5)
+                    except Exception as e:
+                        log_warning(f"Impossibile inviare il messaggio a Telegram: {e}")
+        
+        # Pausa di sicurezza per non sovraccaricare i server e prevenire blocchi
+        time.sleep(3)
+        
+    # Salva il report completo nel file JSON della repository
+    with open('crisis_report.json', 'w', encoding='utf-8') as f:
+        json.dump(crisis_database, f, ensure_ascii=False, indent=4)
+    
+    log_success(f"Analisi completata. Totale eventi di crisi registrati: {len(crisis_database)}")
 
 if __name__ == "__main__":
-    main_investigation()
+    scan_football_radar()
