@@ -1,0 +1,69 @@
+import os
+import re
+import json
+import requests
+import time
+
+def extract_teams(raw_text):
+    teams_list = []
+    lines = raw_text.strip().split('\n')
+    
+    for line in lines:
+        if " - " in line or " vs " in line:
+            # Remove times like 15:30
+            clean_line = re.sub(r'\d{2}:\d{2}', '', line).strip()
+            
+            # Split by common separators
+            if " - " in clean_line:
+                parts = clean_line.split(" - ")
+            else:
+                parts = clean_line.split(" vs ")
+                
+            if len(parts) >= 2:
+                home_team = parts[0].strip()
+                # Clean away odds or brackets from the away team
+                away_team = parts[1].split('(')[0].strip()
+                teams_list.extend([home_team, away_team])
+                
+    return list(set(teams_list)) # Remove duplicates
+
+def search_crisis_news(team_name):
+    # Foreign leagues focus: using global English keywords for better results
+    query = f'"{team_name}" AND ("unpaid wages" OR "strike" OR "youth squad" OR "reserves" OR "injuries")'
+    print(f"Searching for: {query}")
+    
+    # Placeholder for actual API call (e.g., Google Custom Search or NewsAPI)
+    # response = requests.get(f"https://api.some-news-service.com/search?q={query}&apiKey=YOUR_KEY")
+    
+    # Simulating a search delay and result
+    time.sleep(1)
+    
+    # Currently returning a placeholder. Replace with actual JSON parsing from your chosen API.
+    return {
+        "team": team_name,
+        "status": "Checked",
+        "latest_news": f"Automated search executed for {team_name}." 
+    }
+
+def main():
+    raw_schedule = os.environ.get('SCHEDULE_INPUT', '')
+    
+    if not raw_schedule:
+        print("No schedule data received.")
+        return
+
+    teams = extract_teams(raw_schedule)
+    results = []
+
+    for team in teams:
+        news_data = search_crisis_news(team)
+        results.append(news_data)
+
+    # Save results to JSON file
+    with open('news_results.json', 'w', encoding='utf-8') as f:
+        json.dump(results, f, ensure_ascii=False, indent=4)
+        
+    print("Analysis complete. Results saved to news_results.json")
+
+if __name__ == "__main__":
+    main()
