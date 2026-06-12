@@ -6,7 +6,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import time
-import re  # IMPORTANTE: Aggiunto per far funzionare il super-filtro
+import re
 
 def log_info(message): print(f"[*] {message}")
 def log_success(message): print(f"[+] {message}")
@@ -40,16 +40,27 @@ def clean_teams_list(raw_input):
     log_success(f"Pulizia completata. Rilevate {len(lista_finale)} squadre valide.")
     return lista_finale
 
-def fetch_rss_news(query):
-    encoded_query = urllib.parse.quote(f'"{query}" football')
+def fetch_rss_news(team_name):
+    # Ricerca precisa
+    encoded_query = urllib.parse.quote(f'"{team_name}" football')
     url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
-            return [{'title': item.find('title').text, 'link': item.find('link').text, 'pubDate': item.find('pubDate').text} 
-                    for item in root.findall('.//item')]
-    except: return []
+            articles = []
+            for item in root.findall('.//item'):
+                title = item.find('title').text
+                link = item.find('link').text
+                pubDate = item.find('pubDate').text
+                
+                # FILTRO ESATTO: il nome della squadra DEVE essere nel titolo
+                if team_name.lower() in title.lower():
+                    articles.append({'title': title, 'link': link, 'pubDate': pubDate})
+            return articles
+    except Exception as e:
+        log_warning(f"Errore recupero news per {team_name}: {e}")
+        return []
 
 def scan_football_radar():
     raw_teams = os.environ.get("TEAMS_LIST", "")
@@ -82,10 +93,11 @@ def scan_football_radar():
                 if alert_data not in final_crisis_report["events"]:
                     final_crisis_report["events"].append(alert_data)
                     
-                    if telegram_token and chat_id:
-                        msg = f"🚨 *CRISI:* {team}\n⚠️ {triggered.upper()}\n📰 {article['title']}"
+                    # Fix Telegram: niente Markdown, controlla che la squadra esista
+                    if telegram_token and chat_id and team.strip():
+                        msg = f"🚨 CRISI: {team}\n⚠️ {triggered.upper()}\n📰 {article['title']}\n🔗 {article['link']}"
                         try:
-                            urllib.request.urlopen(f"https://api.telegram.org/bot{telegram_token}/sendMessage?chat_id={chat_id}&text={urllib.parse.quote(msg)}&parse_mode=Markdown")
+                            urllib.request.urlopen(f"https://api.telegram.org/bot{telegram_token}/sendMessage?chat_id={chat_id}&text={urllib.parse.quote(msg)}")
                         except Exception as e:
                             log_warning(f"Errore invio Telegram per {team}: {e}")
         time.sleep(2)
