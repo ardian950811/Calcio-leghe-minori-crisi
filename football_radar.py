@@ -73,8 +73,35 @@ def scan_football_radar():
     else:
         teams = clean_teams_list(raw_teams)
     
-    keywords = ['strike', 'salary', 'unpaid', 'injury', 'youth squad', 'reserves', 'boycott', 'huelga', 'impagos', 'greve']
-    ignore_list = ['years', 'sentenced', 'lego', 'prison', 'dead', 'gun', 'police']
+    # LISTA AGGIORNATA DELLE VALUE BETS (Crisi, Infortuni, Ammutinamenti)
+    keywords = [
+        # Infortuni e rosa ridotta
+        'injury crisis', 'depleted squad', 'decimated squad', 'plaga de lesiones', 
+        'plantel diezmado', 'pocos jugadores disponibles', 'emergenza infortuni', 'rosa decimata',
+        
+        # Scioperi, boicottaggi e stipendi non pagati
+        'boycotting training', 'players strike', 'unpaid wages', 'unpaid salaries',
+        'months without pay', 'financial meltdown', 'se niegan a entrenar', 
+        'huelga de futbolistas', 'sueldos impagos', 'salarios atrasados', 'crisis económica',
+        'sciopero giocatori', 'stipendi non pagati', 'boicottano gli allenamenti',
+        
+        # Addio dei giocatori chiave
+        'players walk out', 'mass exodus', 'key players leave', 'contract terminated',
+        'éxodo de jugadores', 'rescindieron contrato', 'referentes abandonan',
+        'esodo di giocatori', 'rescissione del contratto',
+        
+        # Riserve, giovani e turnover
+        'forced to play reserves', 'fielding youth team', 'academy players', 'heavy rotation',
+        'obligado a jugar con juveniles', 'alinear suplentes', 'jugará con la reserva', 'equipo b', 
+        'rotación masiva', 'cuidando titulares', 'squadra riserve', 'in campo la primavera', 'ampio turnover'
+    ]
+    
+    # LISTA IGNORA AGGIORNATA
+    ignore_list = [
+        'years', 'sentenced', 'lego', 'prison', 'dead', 'gun', 'police', 
+        'transfer', 'rumour', 'injury time', 'stoppage time', 'u19', 'u17',
+        'calciomercato', 'mercato', 'minuti di recupero'
+    ]
     
     final_crisis_report = {
         "last_check": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
@@ -93,7 +120,7 @@ def scan_football_radar():
                 if alert_data not in final_crisis_report["events"]:
                     final_crisis_report["events"].append(alert_data)
                     
-                    # Fix Telegram: niente Markdown, controlla che la squadra esista
+                    # Fix Telegram: invio sicuro senza Markdown
                     if telegram_token and chat_id and team.strip():
                         msg = f"🚨 CRISI: {team}\n⚠️ {triggered.upper()}\n📰 {article['title']}\n🔗 {article['link']}"
                         try:
