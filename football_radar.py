@@ -19,20 +19,15 @@ def clean_teams_list(raw_input):
     
     for line in lines:
         line = line.strip()
-        # 1. Rimuovi orari (es 15:30)
         line = re.sub(r'\d{1,2}:\d{2}', '', line)
-        # 2. Rimuovi quote (es 1.85, 3.40)
         line = re.sub(r'\d{1,2}\.\d{2}', '', line)
-        # 3. Rimuovi simboli tipici dei palinsesti
         line = re.sub(r'[\-\(\)\[\]]', '', line)
-        # 4. Rimuovi parole inutili
+        
         trash = ['vs', 'live', 'lineups', 'standings', 'odds', 'risultati', 'orari', 'team']
         for t in trash:
             line = re.sub(r'\b' + t + r'\b', '', line, flags=re.IGNORECASE)
             
         line = line.strip()
-        
-        # FILTRO FINALE: deve essere lungo almeno 4 caratteri e non contenere solo numeri
         if len(line) > 3 and not line.replace(" ", "").isdigit():
             cleaned_teams.add(line)
             
@@ -41,7 +36,6 @@ def clean_teams_list(raw_input):
     return lista_finale
 
 def fetch_rss_news(team_name):
-    # Ricerca precisa
     encoded_query = urllib.parse.quote(f'"{team_name}" football')
     url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -54,7 +48,6 @@ def fetch_rss_news(team_name):
                 link = item.find('link').text
                 pubDate = item.find('pubDate').text
                 
-                # FILTRO ESATTO: il nome della squadra DEVE essere nel titolo
                 if team_name.lower() in title.lower():
                     articles.append({'title': title, 'link': link, 'pubDate': pubDate})
             return articles
@@ -73,34 +66,42 @@ def scan_football_radar():
     else:
         teams = clean_teams_list(raw_teams)
     
-    # LISTA AGGIORNATA DELLE VALUE BETS (Crisi, Infortuni, Ammutinamenti)
+    # LE TUE 10 TIPOLOGIE DI NOTIZIE ESATTE
     keywords = [
-        # Infortuni e rosa ridotta
-        'injury crisis', 'depleted squad', 'decimated squad', 'plaga de lesiones', 
-        'plantel diezmado', 'pocos jugadores disponibles', 'emergenza infortuni', 'rosa decimata',
+        # 1. Squadra con tanti infortuni
+        'injury crisis', 'plaga de lesiones', 'multiple injuries', 'muchas lesiones',
         
-        # Scioperi, boicottaggi e stipendi non pagati
-        'boycotting training', 'players strike', 'unpaid wages', 'unpaid salaries',
-        'months without pay', 'financial meltdown', 'se niegan a entrenar', 
-        'huelga de futbolistas', 'sueldos impagos', 'salarios atrasados', 'crisis económica',
-        'sciopero giocatori', 'stipendi non pagati', 'boicottano gli allenamenti',
+        # 2. Giocatori boicottano allenamenti
+        'boycotting training', 'boycott training', 'se niegan a entrenar', 'boicot a los entrenamientos',
         
-        # Addio dei giocatori chiave
-        'players walk out', 'mass exodus', 'key players leave', 'contract terminated',
-        'éxodo de jugadores', 'rescindieron contrato', 'referentes abandonan',
-        'esodo di giocatori', 'rescissione del contratto',
+        # 3. Sciopero per mancato pagamento dei stipendi
+        'players strike', 'strike over unpaid', 'huelga por falta de pago', 'huelga de jugadores', 'greve de jogadores',
         
-        # Riserve, giovani e turnover
-        'forced to play reserves', 'fielding youth team', 'academy players', 'heavy rotation',
-        'obligado a jugar con juveniles', 'alinear suplentes', 'jugará con la reserva', 'equipo b', 
-        'rotación masiva', 'cuidando titulares', 'squadra riserve', 'in campo la primavera', 'ampio turnover'
+        # 4. Stipendi arretrati
+        'unpaid wages', 'unpaid salaries', 'salarios atrasados', 'sueldos impagos', 
+        
+        # 5. Squadra con pochi giocatori in rosa per problemi
+        'depleted squad', 'only available players', 'pocos jugadores disponibles', 'plantel reducido', 'bare bones squad',
+        
+        # 6. Pilastri hanno abbandonato la squadra
+        'key players leave', 'players walk out', 'mass exodus', 'referentes abandonan', 'éxodo de jugadores', 'rescindieron contrato',
+        
+        # 7. Squadra costretta a giocare con le riserve (per infortuni o fughe)
+        'forced to play reserves', 'fielding reserve team', 'obligado a jugar con suplentes', 'jugará con la reserva', 'alinear suplentes',
+        
+        # 8. Squadra costretta a giocare con i giovani (per infortuni o assenze)
+        'forced to play youth', 'fielding youth team', 'academy players', 'playing with kids', 'obligado a jugar con juveniles', 'canteranos',
+        
+        # 9. Crisi economica, pagate poche mensilità
+        'financial crisis', 'economic crisis', 'months without pay', 'meses sin cobrar', 'crisis económica', 'unpaid for months',
+        
+        # 10. Squadra schiera squadra B o giovani perché non è partita importante (Turnover)
+        'heavy rotation', 'resting key players', 'unimportant match', 'rotación masiva', 'cuidando titulares', 'equipo alternativo', 'playing b team'
     ]
     
-    # LISTA IGNORA AGGIORNATA
     ignore_list = [
         'years', 'sentenced', 'lego', 'prison', 'dead', 'gun', 'police', 
-        'transfer', 'rumour', 'injury time', 'stoppage time', 'u19', 'u17',
-        'calciomercato', 'mercato', 'minuti di recupero'
+        'transfer', 'rumour', 'injury time', 'stoppage time', 'u19', 'u17', 'mercato'
     ]
     
     final_crisis_report = {
@@ -120,7 +121,6 @@ def scan_football_radar():
                 if alert_data not in final_crisis_report["events"]:
                     final_crisis_report["events"].append(alert_data)
                     
-                    # Fix Telegram: invio sicuro senza Markdown
                     if telegram_token and chat_id and team.strip():
                         msg = f"🚨 CRISI: {team}\n⚠️ {triggered.upper()}\n📰 {article['title']}\n🔗 {article['link']}"
                         try:
