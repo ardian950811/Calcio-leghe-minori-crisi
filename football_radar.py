@@ -66,42 +66,54 @@ def scan_football_radar():
     else:
         teams = clean_teams_list(raw_teams)
     
-    # LE TUE 10 TIPOLOGIE DI NOTIZIE ESATTE
+    # IL SUPER ARSENALE DI PAROLE CHIAVE AGGIORNATO (TUTTI I CASI DI CRISI POSSIBILI)
     keywords = [
-        # 1. Squadra con tanti infortuni
-        'injury crisis', 'plaga de lesiones', 'multiple injuries', 'muchas lesiones',
+        # 1. Infortuni di massa e rosa decimata
+        'injury crisis', 'plaga de lesiones', 'multiple injuries', 'muchas lesiones', 'emergenza infortuni', 'rosa decimata',
         
         # 2. Giocatori boicottano allenamenti
-        'boycotting training', 'boycott training', 'se niegan a entrenar', 'boicot a los entrenamientos',
+        'boycotting training', 'boycott training', 'se niegan a entrenar', 'boicot a los entrenamientos', 'boicottano gli allenamenti',
         
-        # 3. Sciopero per mancato pagamento dei stipendi
-        'players strike', 'strike over unpaid', 'huelga por falta de pago', 'huelga de jugadores', 'greve de jogadores',
+        # 3. Sciopero per mancato pagamento stipendi
+        'players strike', 'strike over unpaid', 'huelga por falta de pago', 'huelga de jugadores', 'greve de jogadores', 'sciopero giocatori',
         
         # 4. Stipendi arretrati
-        'unpaid wages', 'unpaid salaries', 'salarios atrasados', 'sueldos impagos', 
+        'unpaid wages', 'unpaid salaries', 'salarios atrasados', 'sueldos impagos', 'stipendi non pagati', 'debito con el plantel',
         
-        # 5. Squadra con pochi giocatori in rosa per problemi
-        'depleted squad', 'only available players', 'pocos jugadores disponibles', 'plantel reducido', 'bare bones squad',
+        # 5. Pochi giocatori in rosa / Emergenza numerica
+        'depleted squad', 'only available players', 'pocos jugadores disponibles', 'plantel reducido', 'bare bones squad', 'rosa ridotta all osso',
         
-        # 6. Pilastri hanno abbandonato la squadra
-        'key players leave', 'players walk out', 'mass exodus', 'referentes abandonan', 'éxodo de jugadores', 'rescindieron contrato',
+        # 6. Pilastri e big abbandonano la squadra / Fuga
+        'key players leave', 'players walk out', 'mass exodus', 'referentes abandonan', 'éxodo de jugadores', 'rescindieron contrato', 'esodo di giocatori', 'rescissione del contratto', 'abbandonano il club', 'mass departure',
         
-        # 7. Squadra costretta a giocare con le riserve (per infortuni o fughe)
-        'forced to play reserves', 'fielding reserve team', 'obligado a jugar con suplentes', 'jugará con la reserva', 'alinear suplentes',
+        # 7. Forzati a giocare con le riserve
+        'forced to play reserves', 'fielding reserve team', 'obligado a jugar con suplentes', 'jugará con la reserva', 'alinear suplentes', 'squadra riserve',
         
-        # 8. Squadra costretta a giocare con i giovani (per infortuni o assenze)
-        'forced to play youth', 'fielding youth team', 'academy players', 'playing with kids', 'obligado a jugar con juveniles', 'canteranos',
+        # 8. Forzati a giocare con i giovani / ragazzini
+        'forced to play youth', 'fielding youth team', 'academy players', 'playing with kids', 'obligado a jugar con juveniles', 'canteranos', 'in campo la primavera',
         
-        # 9. Crisi economica, pagate poche mensilità
-        'financial crisis', 'economic crisis', 'months without pay', 'meses sin cobrar', 'crisis económica', 'unpaid for months',
+        # 9. Crisi economica profonda (mensilità scarse o nulle)
+        'financial crisis', 'economic crisis', 'months without pay', 'meses sin cobrar', 'crisis económica', 'unpaid for months', 'fallimento', 'bankruptcy', 'quiebra', 'financial meltdown',
         
-        # 10. Squadra schiera squadra B o giovani perché non è partita importante (Turnover)
-        'heavy rotation', 'resting key players', 'unimportant match', 'rotación masiva', 'cuidando titulares', 'equipo alternativo', 'playing b team'
+        # 10. Turnover massiccio / Partita snobbata o non importante
+        'heavy rotation', 'resting key players', 'unimportant match', 'rotación masiva', 'cuidando titulares', 'equipo alternativo', 'playing b team', 'ampio turnover',
+        
+        # 11. NUOVO: Spogliatoio spaccato e caos interno
+        'vestuario roto', 'locker room crisis', 'spogliatoio spaccato', 'broken dressing room', 'internal war', 'crisis interna',
+        
+        # 12. NUOVO: Disastri nei viaggi e logistica
+        'travel chaos', 'bus broke down', 'stranded at airport', 'arrived late', 'caos logístico', 'micro averiado', 'llegada tardía', 'varados',
+        
+        # 13. NUOVO: Intossicazioni alimentari e virus di squadra
+        'virus outbreak', 'food poisoning', 'flu epidemic', 'players ill', 'intoxicación masiva', 'brote de virus', 'jugadores enfermos', 'cuadro viral',
+        
+        # 14. NUOVO: Scontri duri con i tifosi / Ultras
+        'fans protest', 'attacked by fans', 'training interrupted', 'apretada de la barra', 'protesta de hinchas', 'clima tenso', 'minacce ultras'
     ]
     
     ignore_list = [
         'years', 'sentenced', 'lego', 'prison', 'dead', 'gun', 'police', 
-        'transfer', 'rumour', 'injury time', 'stoppage time', 'u19', 'u17', 'mercato'
+        'transfer', 'rumour', 'injury time', 'stoppage time', 'u19', 'u17', 'mercato', 'calciomercato'
     ]
     
     final_crisis_report = {
