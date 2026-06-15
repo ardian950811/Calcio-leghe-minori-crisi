@@ -23,6 +23,11 @@ def clean_teams_list(raw_input):
         line = re.sub(r'\d{1,2}\.\d{2}', '', line)
         line = re.sub(r'[\-\(\)\[\]]', '', line)
         
+        # Rimuove le sigle societarie che disturbano la ricerca globale di Google News
+        sigle = [r'\bFC\b', r'\bCF\b', r'\bCD\b', r'\bCA\b', r'\bUD\b', r'\bAC\b', r'\bU20\b', r'\bU23\b']
+        for s in sigle:
+            line = re.sub(s, '', line, flags=re.IGNORECASE)
+            
         trash = ['vs', 'live', 'lineups', 'standings', 'odds', 'risultati', 'orari', 'team']
         for t in trash:
             line = re.sub(r'\b' + t + r'\b', '', line, flags=re.IGNORECASE)
@@ -36,19 +41,27 @@ def clean_teams_list(raw_input):
     return lista_finale
 
 def fetch_rss_news(team_name):
-    encoded_query = urllib.parse.quote(f'"{team_name}" football')
+    # Ricerca globale elastica (senza virgolette rigide)
+    query = f"{team_name} football"
+    encoded_query = urllib.parse.quote(query)
     url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
             articles = []
+            
+            # Estrae la parola principale e più significativa della squadra per il controllo
+            parole = [p for p in team_name.split() if len(p) > 3]
+            parola_chiave_squadra = max(parole, key=len).lower() if parole else team_name.lower()
+            
             for item in root.findall('.//item'):
                 title = item.find('title').text
                 link = item.find('link').text
                 pubDate = item.find('pubDate').text
                 
-                if team_name.lower() in title.lower():
+                # Controllo flessibile: basta che la parola chiave sia nel titolo dell'articolo
+                if parola_chiave_squadra in title.lower():
                     articles.append({'title': title, 'link': link, 'pubDate': pubDate})
             return articles
     except Exception as e:
@@ -66,7 +79,7 @@ def scan_football_radar():
     else:
         teams = clean_teams_list(raw_teams)
     
-    # IL SUPER ARSENALE DI PAROLE CHIAVE AGGIORNATO (TUTTI I CASI DI CRISI POSSIBILI)
+    # TUTTE LE TUE CATEGORIE RICHIESTE + NUOVE FRASI DI CRISI
     keywords = [
         # 1. Infortuni di massa e rosa decimata
         'injury crisis', 'plaga de lesiones', 'multiple injuries', 'muchas lesiones', 'emergenza infortuni', 'rosa decimata',
@@ -77,14 +90,14 @@ def scan_football_radar():
         # 3. Sciopero per mancato pagamento stipendi
         'players strike', 'strike over unpaid', 'huelga por falta de pago', 'huelga de jugadores', 'greve de jogadores', 'sciopero giocatori',
         
-        # 4. Stipendi arretrati
+        # 4. Stipendi arretrati / Mancati pagamenti
         'unpaid wages', 'unpaid salaries', 'salarios atrasados', 'sueldos impagos', 'stipendi non pagati', 'debito con el plantel',
         
         # 5. Pochi giocatori in rosa / Emergenza numerica
         'depleted squad', 'only available players', 'pocos jugadores disponibles', 'plantel reducido', 'bare bones squad', 'rosa ridotta all osso',
         
-        # 6. Pilastri e big abbandonano la squadra / Fuga
-        'key players leave', 'players walk out', 'mass exodus', 'referentes abandonan', 'éxodo de jugadores', 'rescindieron contrato', 'esodo di giocatori', 'rescissione del contratto', 'abbandonano il club', 'mass departure',
+        # 6. Pilastri e big abbandonano la squadra / Fuga societaria
+        'key players leave', 'players walk out', 'mass exodus', 'referentes abandonan', 'éxodo de jugadores', 'rescindieron contrato', 'esodo di giocatori', 'rescissione del contratto', 'abbandonano il club', 'mass departure', 'free agents', 'contratto risolto',
         
         # 7. Forzati a giocare con le riserve
         'forced to play reserves', 'fielding reserve team', 'obligado a jugar con suplentes', 'jugará con la reserva', 'alinear suplentes', 'squadra riserve',
@@ -92,23 +105,23 @@ def scan_football_radar():
         # 8. Forzati a giocare con i giovani / ragazzini
         'forced to play youth', 'fielding youth team', 'academy players', 'playing with kids', 'obligado a jugar con juveniles', 'canteranos', 'in campo la primavera',
         
-        # 9. Crisi economica profonda (mensilità scarse o nulle)
+        # 9. Crisi economica profonda (mensilità scarse o nulle, fallimenti)
         'financial crisis', 'economic crisis', 'months without pay', 'meses sin cobrar', 'crisis económica', 'unpaid for months', 'fallimento', 'bankruptcy', 'quiebra', 'financial meltdown',
         
         # 10. Turnover massiccio / Partita snobbata o non importante
         'heavy rotation', 'resting key players', 'unimportant match', 'rotación masiva', 'cuidando titulares', 'equipo alternativo', 'playing b team', 'ampio turnover',
         
-        # 11. NUOVO: Spogliatoio spaccato e caos interno
+        # 11. Spogliatoio spaccato, caos interno e ammutinamenti
         'vestuario roto', 'locker room crisis', 'spogliatoio spaccato', 'broken dressing room', 'internal war', 'crisis interna',
         
-        # 12. NUOVO: Disastri nei viaggi e logistica
-        'travel chaos', 'bus broke down', 'stranded at airport', 'arrived late', 'caos logístico', 'micro averiado', 'llegada tardía', 'varados',
+        # 12. Disastri nei viaggi e logistica pesante delle trasferte minori
+        'travel chaos', 'bus broke down', 'stranded at airport', 'arrived late', 'caos logístico', 'micro averiado', 'llegada tardía', 'varados', 'ônibus quebrado', 'atraso no voo',
         
-        # 13. NUOVO: Intossicazioni alimentari e virus di squadra
-        'virus outbreak', 'food poisoning', 'flu epidemic', 'players ill', 'intoxicación masiva', 'brote de virus', 'jugadores enfermos', 'cuadro viral',
+        # 13. Intossicazioni alimentari e virus improvvisi di squadra
+        'virus outbreak', 'food poisoning', 'flu epidemic', 'players ill', 'intoxicación masiva', 'brote di virus', 'jugadores enfermos', 'cuadro viral', 'intoxicação alimentar',
         
-        # 14. NUOVO: Scontri duri con i tifosi / Ultras
-        'fans protest', 'attacked by fans', 'training interrupted', 'apretada de la barra', 'protesta de hinchas', 'clima tenso', 'minacce ultras'
+        # 14. Scontri duri con i tifosi / Minacce Ultras e Barras Bravas
+        'fans protest', 'attacked by fans', 'training interrupted', 'apretada de la barra', 'protesta de hinchas', 'clima tenso', 'minacce ultras', 'agredidos por hinchas', 'treino invadido'
     ]
     
     ignore_list = [
@@ -139,7 +152,7 @@ def scan_football_radar():
                             urllib.request.urlopen(f"https://api.telegram.org/bot{telegram_token}/sendMessage?chat_id={chat_id}&text={urllib.parse.quote(msg)}")
                         except Exception as e:
                             log_warning(f"Errore invio Telegram per {team}: {e}")
-        time.sleep(2)
+        time.sleep(1.5)
         
     with open('crisis_report.json', 'w', encoding='utf-8') as f:
         json.dump(final_crisis_report, f, ensure_ascii=False, indent=4)
