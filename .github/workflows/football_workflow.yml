@@ -2,10 +2,14 @@ name: run-scrp
 
 on:
   workflow_dispatch:
+    inputs:
+      teams_list:
+        description: 'Lista delle squadre'
+        required: false
+        default: ''
 
 jobs:
   run-radar:
-    runs-size: ubuntu-latest
     runs-on: ubuntu-latest
 
     steps:
