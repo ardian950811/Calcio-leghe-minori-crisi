@@ -41,10 +41,12 @@ def clean_teams_list(raw_input):
     return lista_finale
 
 def fetch_rss_news(team_name):
-    # Ricerca globale elastica (senza virgolette rigide)
-    query = f"{team_name} football"
+    # Ricerca globale VERA: Nome squadra + almeno una parola chiave sportiva nella lingua locale
+    query = f'"{team_name}" (football OR futbol OR futebol OR calcio OR soccer)'
     encoded_query = urllib.parse.quote(query)
-    url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
+    
+    # URL pulito: rimosso il blocco hl=en-US&gl=US che limitava la ricerca ai soli USA
+    url = f"https://news.google.com/rss/search?q={encoded_query}"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
@@ -79,7 +81,6 @@ def scan_football_radar():
     else:
         teams = clean_teams_list(raw_teams)
     
-    # TUTTE LE TUE CATEGORIE RICHIESTE + NUOVE FRASI DI CRISI
     keywords = [
         # 1. Infortuni di massa e rosa decimata
         'injury crisis', 'plaga de lesiones', 'multiple injuries', 'muchas lesiones', 'emergenza infortuni', 'rosa decimata',
@@ -161,3 +162,4 @@ def scan_football_radar():
 
 if __name__ == "__main__":
     scan_football_radar()
+    
