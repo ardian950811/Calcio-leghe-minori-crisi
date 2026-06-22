@@ -3,37 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Radar Notizie Squadre</title>
+    <title>Pannello Controllo Radar</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #121212; color: #ffffff; padding: 20px; }
         .container { max-width: 900px; margin: auto; }
+        textarea { width: 100%; height: 200px; background-color: #1e1e1e; color: #fff; border: 1px solid #333; padding: 10px; border-radius: 5px; font-size: 14px; margin-bottom: 15px; box-sizing: border-box; }
+        input[type="text"] { width: 100%; padding: 10px; background-color: #1e1e1e; color: #fff; border: 1px solid #333; margin-bottom: 15px; border-radius: 5px; box-sizing: border-box; }
+        .btn-lancia { display: block; width: 100%; padding: 12px; background-color: #00ff88; color: #121212; border: none; border-radius: 5px; font-weight: bold; font-size: 16px; cursor: pointer; margin-bottom: 30px; }
         .news-card { background-color: #1e1e1e; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 5px solid #00ff88; }
         .team-name { color: #00ff88; font-size: 18px; font-weight: bold; margin-bottom: 5px; }
         .news-title { font-size: 16px; margin-bottom: 10px; }
-        a.btn { display: inline-block; padding: 8px 15px; background-color: #00ff88; color: #121212; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; }
-        .header { text-align: center; margin-bottom: 30px; }
+        a.btn-link { display: inline-block; padding: 8px 15px; background-color: #333; color: #fff; text-decoration: none; border-radius: 5px; font-size: 14px; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #333; padding-bottom: 20px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header">
-        <h1>📡 Radar Notizie (Ultimi 4 Giorni)</h1>
-        <p id="last-update">Caricamento dati...</p>
+        <h1>📡 Pannello di Controllo & Risultati</h1>
+        <p id="last-update">Verifica ultimo aggiornamento...</p>
     </div>
 
-    <div id="news-container"></div>
+    <!-- SEZIONE INVIO DATI -->
+    <h3>1. Incolla qui il Palinsesto di AiScore:</h3>
+    <textarea id="teams-input" placeholder="Incolla qui tutto il testo copiato da AiScore..."></textarea>
+    
+    <h3>2. Inserisci il tuo Token GitHub:</h3>
+    <input type="text" id="github-token" placeholder="Incolla il tuo token personale (ghp_...)">
+
+    <button class="btn-lancia" onclick="avviaRadar()">🚀 AVVIA RADAR INVESTIGATIVO</button>
+
+    <hr style="border: 1px solid #333; margin: 40px 0;">
+
+    <!-- SEZIONE LETTURA NOTIZIE -->
+    <h2>📰 Ultime Notizie Rilevate (Tradotte in Italiano)</h2>
+    <div id="news-container">Caricamento notizie in corso...</div>
 </div>
 
 <script>
+    // 1. CARICA LE NOTIZIE ESISTENTI NEL FILE JSON
     fetch('crisis_report.json')
         .then(response => response.json())
         .then(data => {
-            document.getElementById('last-update').innerText = "Ultimo aggiornamento: " + data.last_check;
-            
+            document.getElementById('last-update').innerText = "Ultimo aggiornamento nei log: " + data.last_check;
             const container = document.getElementById('news-container');
-            if (data.events.length === 0) {
-                container.innerHTML = "<p>Nessuna notizia trovata per le squadre in lista.</p>";
+            container.innerHTML = "";
+            
+            if (!data.events || data.events.length === 0) {
+                container.innerHTML = "<p>Nessuna notizia presente. Incolla un palinsesto sopra e avvia il radar per cercarle.</p>";
                 return;
             }
 
@@ -43,14 +61,49 @@
                 card.innerHTML = `
                     <div class="team-name">${event.team}</div>
                     <div class="news-title">${event.title}</div>
-                    <a href="${event.link}" target="_blank" class="btn">Apri Articolo Originale</a>
+                    <a href="${event.link}" target="_blank" class="btn-link">Apri Fonte Originale</a>
                 `;
                 container.appendChild(card);
             });
         })
-        .catch(error => {
-            document.getElementById('news-container').innerHTML = "<p>Errore nel caricamento delle notizie. Avvia il radar per generare il file.</p>";
+        .catch(() => {
+            document.getElementById('news-container').innerHTML = "<p>Nessun report trovato. Fai partire il primo test per crearlo.</p>";
         });
+
+    // 2. FUNZIONE PER FAR PARTIRE IL BOT SU GITHUB
+    function avviaRadar() {
+        const inputTesto = document.getElementById('teams-input').value;
+        const token = document.getElementById('github-token').value;
+
+        if(!inputTesto || !token) {
+            alert("Per favore, inserisci sia il palinsesto che il token!");
+            return;
+        }
+
+        // Modifica questi due dati mettendo il tuo nome utente e il nome esatto della tua repository
+        const utente = "ardian950811"; 
+        const repo = "Calcio-leghe-minori-crisi"; 
+
+        alert("Invio comando a GitHub in corso... Attendi la conferma.");
+
+        fetch(`https://api.github.com/repos/${utente}/${repo}/actions/workflows/run-scrp.yml/dispatches`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ref: 'main', inputs: { teams_list: inputTesto } })
+        })
+        .then(response => {
+            if (response.status === 204) {
+                alert("🚀 Radar Avviato con successo! Il bot sta pulendo il palinsesto e cercando le notizie. Tra circa 3-4 minuti rinfresca questa pagina per leggerle!");
+            } else {
+                alert("Errore durante l'avvio. Controlla che il Token sia corretto.");
+            }
+        })
+        .catch(err => alert("Errore di connessione: " + err));
+    }
 </script>
 
 </body>
