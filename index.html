@@ -3,145 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Football Crisis Radar</title>
+    <title>Radar Notizie Squadre</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #1e1e1e; color: white; padding: 20px; }
-        .panel { background-color: #2c2f33; padding: 20px; border-radius: 8px; margin-bottom: 20px; max-width: 800px; margin: auto; }
-        textarea, input { width: 100%; margin-bottom: 15px; padding: 10px; border-radius: 4px; border: 1px solid #555; background-color: #222; color: white; box-sizing: border-box; }
-        button { background-color: #4CAF50; color: white; padding: 12px 20px; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; margin-bottom: 15px; }
-        button:disabled { background-color: #555; cursor: not-allowed; }
-        button:hover:not(:disabled) { background-color: #45a049; }
-        #actionStatus { margin-top: 15px; font-weight: bold; text-align: center; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
-        th, td { padding: 12px; border: 1px solid #444; text-align: left; }
-        th { background-color: #444; }
-        tr:nth-child(even) { background-color: #333; }
-        a { color: #4CAF50; text-decoration: none; }
-        a:hover { text-decoration: underline; }
+        body { font-family: Arial, sans-serif; background-color: #121212; color: #ffffff; padding: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        .news-card { background-color: #1e1e1e; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 5px solid #00ff88; }
+        .team-name { color: #00ff88; font-size: 18px; font-weight: bold; margin-bottom: 5px; }
+        .news-title { font-size: 16px; margin-bottom: 10px; }
+        a.btn { display: inline-block; padding: 8px 15px; background-color: #00ff88; color: #121212; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; }
+        .header { text-align: center; margin-bottom: 30px; }
     </style>
 </head>
 <body>
 
-    <div class="panel">
-        <h2>Radar Control Panel</h2>
-        <p>Incolla qui il palinsesto di AiScore:</p>
-        <textarea id="teamsInput" rows="8" placeholder="Copia l'elenco e incolla qui..."></textarea>
-        
-        <p>Token GitHub (Password):</p>
-        <input type="password" id="githubToken" placeholder="Incolla il tuo Personal Access Token">
-        
-        <button id="analyze_btn" onclick="triggerGitHubAction()">Avvia Radar</button>
-        <div id="actionStatus"></div>
-
-        <h3 style="margin-top: 30px; border-bottom: 1px solid #555; padding-bottom: 10px;">Risultati Radar</h3>
-        <table id="results_table">
-            <thead>
-                <tr>
-                    <th>Squadra</th>
-                    <th>Allarme</th>
-                    <th>Notizia (Clicca per leggere)</th>
-                </tr>
-            </thead>
-            <tbody id="table_body">
-                <tr>
-                    <td colspan="3" style="text-align: center; color: #aaa;">In attesa di dati...</td>
-                </tr>
-            </tbody>
-        </table>
+<div class="container">
+    <div class="header">
+        <h1>📡 Radar Notizie (Ultimi 4 Giorni)</h1>
+        <p id="last-update">Caricamento dati...</p>
     </div>
 
-    <script>
-    const githubUser = "ardian950811";
-    const repoName = "Calcio-leghe-minori-crisi";
-    const workflowId = "football_workflow.yml";
+    <div id="news-container"></div>
+</div>
 
-    async function triggerGitHubAction() {
-        const teamsList = document.getElementById('teamsInput').value;
-        const token = document.getElementById('githubToken').value;
-        const statusText = document.getElementById('actionStatus');
-        const button = document.getElementById('analyze_btn');
-        
-        if (!teamsList || !token) {
-            statusText.innerHTML = "<span style='color: #ff4d4d;'>Errore: Inserisci le squadre e il Token.</span>";
-            return;
-        }
-
-        button.disabled = true;
-        statusText.innerHTML = "<span style='color: orange;'>Avvio investigazione in corso su GitHub... Attendi circa 1 minuto.</span>";
-
-        const apiUrl = `https://api.github.com/repos/${githubUser}/${repoName}/actions/workflows/${workflowId}/dispatches`;
-
-        try {
-            const response = await fetch(apiUrl, {
-                method: "POST",
-                headers: {
-                    "Accept": "application/vnd.github.v3+json",
-                    "Authorization": `token ${token}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    ref: "main",
-                    inputs: { teams_list: teamsList }
-                })
-            });
-
-            if (response.ok || response.status === 204) {
-                statusText.innerHTML = "<span style='color: lightgreen;'>Radar avviato con successo! Recupero dei risultati...</span>";
-                document.getElementById('teamsInput').value = ""; 
-                // Aspetta 45 secondi e poi cerca i risultati
-                setTimeout(fetchResults, 45000);
-            } else {
-                throw new Error("Errore API");
-            }
-        } catch (error) {
-            statusText.innerHTML = "<span style='color: #ff4d4d;'>Errore: Controlla il Token o la connessione.</span>";
-            button.disabled = false;
-        }
-    }
-
-    async function fetchResults() {
-        const statusText = document.getElementById('actionStatus');
-        const button = document.getElementById('analyze_btn');
-        
-        const timestamp = new Date().getTime(); // Evita la cache
-        const rawUrl = `https://raw.githubusercontent.com/${githubUser}/${repoName}/main/crisis_report.json?t=${timestamp}`;
-
-        try {
-            const response = await fetch(rawUrl);
-            if (!response.ok) throw new Error("JSON non pronto");
+<script>
+    fetch('crisis_report.json')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('last-update').innerText = "Ultimo aggiornamento: " + data.last_check;
             
-            const data = await response.json();
-            updateTable(data);
-            button.disabled = false;
-        } catch (error) {
-            statusText.innerHTML = "<span style='color: orange;'>Analisi ancora in corso... Riprovo tra 10 secondi.</span>";
-            setTimeout(fetchResults, 10000);
-        }
-    }
+            const container = document.getElementById('news-container');
+            if (data.events.length === 0) {
+                container.innerHTML = "<p>Nessuna notizia trovata per le squadre in lista.</p>";
+                return;
+            }
 
-    function updateTable(data) {
-        const tbody = document.getElementById('table_body');
-        const events = data.events || []; 
-        tbody.innerHTML = ''; 
-
-        const statusDiv = document.getElementById('actionStatus');
-        statusDiv.innerHTML = `<span style="color: lightgreen;">Analisi completata! Ultima scansione: ${data.last_check || 'Sconosciuta'}</span>`;
-
-        if(events.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #4CAF50;">✅ Nessuna crisi rilevata. Sistema pulito.</td></tr>';
-            return;
-        }
-
-        events.forEach(item => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><strong>${item.team}</strong></td>
-                <td><span style="color: #ff4d4d; font-weight: bold;">${item.keyword.toUpperCase()}</span></td>
-                <td><a href="${item.link}" target="_blank">${item.title}</a></td>
-            `;
-            tbody.appendChild(row);
+            data.events.forEach(event => {
+                const card = document.createElement('div');
+                card.className = 'news-card';
+                card.innerHTML = `
+                    <div class="team-name">${event.team}</div>
+                    <div class="news-title">${event.title}</div>
+                    <a href="${event.link}" target="_blank" class="btn">Apri Articolo Originale</a>
+                `;
+                container.appendChild(card);
+            });
+        })
+        .catch(error => {
+            document.getElementById('news-container').innerHTML = "<p>Errore nel caricamento delle notizie. Avvia il radar per generare il file.</p>";
         });
-    }
-    </script>
+</script>
+
 </body>
 </html>
