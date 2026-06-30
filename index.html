@@ -70,26 +70,26 @@
             document.getElementById('news-container').innerHTML = "<p>Nessun report trovato. Fai partire il primo test per crearlo.</p>";
         });
 
-    // 2. FUNZIONE PER FAR PARTIRE IL BOT SU GITHUB
+    // 2. FUNZIONE PER FAR PARTIRE IL BOT SU GITHUB (CORRETTA)
     function avviaRadar() {
-        const inputTesto = document.getElementById('teams-input').value;
-        const token = document.getElementById('github-token').value;
+        const inputTesto = document.getElementById('teams-input').value.trim();
+        const token = document.getElementById('github-token').value.trim();
 
         if(!inputTesto || !token) {
             alert("Per favore, inserisci sia il palinsesto che il token!");
             return;
         }
 
-        // Modifica questi due dati mettendo il tuo nome utente e il nome esatto della tua repository
         const utente = "ardian950811"; 
         const repo = "Calcio-leghe-minori-crisi"; 
 
         alert("Invio comando a GitHub in corso... Attendi la conferma.");
 
+        // Modificato l'header con Bearer e i backtick corretti ``
         fetch(`https://api.github.com/repos/${utente}/${repo}/actions/workflows/run-scrp.yml/dispatches`, {
             method: 'POST',
             headers: {
-                'Authorization': `token ${token}`,
+                'Authorization': `Bearer ${token}`,
                 'Accept': 'application/vnd.github.v3+json',
                 'Content-Type': 'application/json'
             },
@@ -97,9 +97,9 @@
         })
         .then(response => {
             if (response.status === 204) {
-                alert("🚀 Radar Avviato con successo! Il bot sta pulendo il palinsesto e cercando le notizie. Tra circa 3-4 minuti rinfresca questa pagina per leggerle!");
+                alert("🚀 Radar Avviato con successo! Il bot sta cercando le notizie. Tra circa 3-4 minuti rinfresca questa pagina per leggerle!");
             } else {
-                alert("Errore durante l'avvio. Controlla che il Token sia corretto.");
+                alert("Errore da GitHub. Codice Stato: " + response.status + ". Verifica che il Token sia corretto e abbia i permessi 'workflow' attivi.");
             }
         })
         .catch(err => alert("Errore di connessione: " + err));
