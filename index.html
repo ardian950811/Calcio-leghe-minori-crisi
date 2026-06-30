@@ -25,7 +25,6 @@
         <p id="last-update">Verifica ultimo aggiornamento...</p>
     </div>
 
-    <!-- SEZIONE INVIO DATI -->
     <h3>1. Incolla qui il Palinsesto di AiScore:</h3>
     <textarea id="teams-input" placeholder="Incolla qui tutto il testo copiato da AiScore..."></textarea>
     
@@ -36,7 +35,6 @@
 
     <hr style="border: 1px solid #333; margin: 40px 0;">
 
-    <!-- SEZIONE LETTURA NOTIZIE -->
     <h2>📰 Ultime Notizie Rilevate (Tradotte in Italiano)</h2>
     <div id="news-container">Caricamento notizie in corso...</div>
 </div>
@@ -70,7 +68,7 @@
             document.getElementById('news-container').innerHTML = "<p>Nessun report trovato. Fai partire il primo test per crearlo.</p>";
         });
 
-    // 2. FUNZIONE PER FAR PARTIRE IL BOT SU GITHUB (CORRETTA)
+    // 2. FUNZIONE PER FAR PARTIRE IL BOT SU GITHUB
     function avviaRadar() {
         const inputTesto = document.getElementById('teams-input').value.trim();
         const token = document.getElementById('github-token').value.trim();
@@ -85,8 +83,8 @@
 
         alert("Invio comando a GitHub in corso... Attendi la conferma.");
 
-        // Modificato l'header con Bearer e i backtick corretti ``
-        fetch(`https://api.github.com/repos/${utente}/${repo}/actions/workflows/run-scrp.yml/dispatches`, {
+        // Chiamata corretta al file workflow individuato
+        fetch(`https://api.github.com/repos/${utente}/${repo}/actions/workflows/football_workflow.yml/dispatches`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
