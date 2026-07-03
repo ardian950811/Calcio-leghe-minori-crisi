@@ -10,7 +10,7 @@ import re
 def log_info(message): print(f"[*] {message}")
 def log_success(message): print(f"[+] {message}")
 
-# --- NUOVA FUNZIONE: Traduttore Automatico in Italiano ---
+# --- Traduttore Automatico in Italiano ---
 def traduci_in_italiano(testo):
     try:
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=it&dt=t&q={urllib.parse.quote(testo)}"
@@ -19,8 +19,8 @@ def traduci_in_italiano(testo):
             data = json.loads(response.read().decode('utf-8'))
             return data[0][0][0]
     except Exception as e:
-        print(f"Errore di traduzione: {e}")
-        return testo # Se la traduzione fallisce, tiene il testo originale
+        print(f"    [!] Errore di traduzione (forse troppe richieste): {e}")
+        return testo # Se fallisce tiene il testo originale in inglese/lingua madre
 
 def clean_teams_list(raw_input):
     elementi_da_ignorare = ["diretta", "risultati", "aiscore", "scarica", "pallacanestro", "tennis", "live", "sospesa", "punteggio"]
@@ -31,14 +31,24 @@ def clean_teams_list(raw_input):
     for line in lines:
         line = line.strip()
         if not line or ":" in line or re.search(r'\d{1,2}:\d{2}', line) or len(line) <= 2: continue
+        
+        if any(ignore_word.lower() in line.lower() for ignore_word in elementi_da_ignorare):
+            continue
+
         nome = line
-        for r in rimozioni: nome = re.sub(r, '', nome, flags=re.IGNORECASE)
+        for r in rimovizioni: 
+            nome = re.sub(r, '', nome, flags=re.IGNORECASE)
+        
         nome = nome.strip()
-        if len(nome) > 2 and not nome.replace(" ", "").isdigit(): cleaned_teams.add(nome)
+        if len(nome) > 2 and not nome.replace(" ", "").isdigit(): 
+            cleaned_teams.add(nome)
+            
     return sorted(list(cleaned_teams))
 
 def fetch_all_news(team_name):
-    query = f"{team_name} (football OR calcio OR soccer) when:4d"
+    # PAROLE CHIAVE RIMOSSE: Cerca qualsiasi notizia sulla squadra, ma solo degli ultimi 2 giorni (when:2d)
+    query = f"{team_name} (football OR calcio OR soccer) when:2d"
+    
     encoded_query = urllib.parse.quote(query)
     url = f"https://news.google.com/rss/search?q={encoded_query}"
     
@@ -53,29 +63,43 @@ def fetch_all_news(team_name):
                     'link': item.find('link').text
                 })
             return articles
-    except: return []
+    except Exception as e: 
+        print(f"    [!] Errore lettura Google News per {team_name}: {e}")
+        return []
 
 def scan_football_radar():
     raw_teams = os.environ.get("TEAMS_LIST", "")
     teams = clean_teams_list(raw_teams) if raw_teams else []
     
+    # Questo ti permette di vedere nel log di GitHub quali squadre sta effettivamente scansionando
+    log_info(f"Squadre rilevate nel palinsesto dopo la pulizia: {len(teams)}")
+    print(teams)
+    
     report = {"last_check": datetime.now().strftime("%d/%m/%Y %H:%M:%S"), "events": []}
     
     for team in teams:
-        print(f"[*] Monitoro: {team}")
+        log_info(f"Monitoro tutte le notizie di: {team}")
         news = fetch_all_news(team)
+        
+        if not news:
+            print("    Nessuna notizia trovata nelle ultime 48 ore.")
+            
         for article in news:
-            # Traduce il titolo prima di salvarlo!
             titolo_ita = traduci_in_italiano(article['title'])
             report["events"].append({
                 'team': team, 
                 'title': titolo_ita, 
                 'link': article['link']
             })
+            # Pausa di sicurezza per non far arrabbiare il traduttore di Google
+            time.sleep(0.5) 
+            
+        # Pausa tra una squadra e l'altra per non fare richieste troppo frenetiche
         time.sleep(1.5)
         
     with open('crisis_report.json', 'w', encoding='utf-8') as f:
         json.dump(report, f, ensure_ascii=False, indent=4)
+        
     log_success(f"Monitoraggio completato. Trovate {len(report['events'])} notizie totali.")
 
 if __name__ == "__main__":
