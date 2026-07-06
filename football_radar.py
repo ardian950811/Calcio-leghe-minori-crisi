@@ -20,7 +20,7 @@ def traduci_in_italiano(testo):
             return data[0][0][0]
     except Exception as e:
         print(f"    [!] Errore di traduzione (forse troppe richieste): {e}")
-        return testo # Se fallisce tiene il testo originale in inglese/lingua madre
+        return testo 
 
 def clean_teams_list(raw_input):
     elementi_da_ignorare = ["diretta", "risultati", "aiscore", "scarica", "pallacanestro", "tennis", "live", "sospesa", "punteggio"]
@@ -36,7 +36,7 @@ def clean_teams_list(raw_input):
             continue
 
         nome = line
-        for r in rimovizioni: 
+        for r in rimozioni: 
             nome = re.sub(r, '', nome, flags=re.IGNORECASE)
         
         nome = nome.strip()
@@ -46,8 +46,8 @@ def clean_teams_list(raw_input):
     return sorted(list(cleaned_teams))
 
 def fetch_all_news(team_name):
-    # PAROLE CHIAVE RIMOSSE: Cerca qualsiasi notizia sulla squadra, ma solo degli ultimi 2 giorni (when:2d)
-    query = f"{team_name} (football OR calcio OR soccer) when:2d"
+    # FIX: Nome tra virgolette assolute per forzare l'esattezza e filtro rigoroso per sport estero
+    query = f'"{team_name}" AND (football OR soccer) when:2d'
     
     encoded_query = urllib.parse.quote(query)
     url = f"https://news.google.com/rss/search?q={encoded_query}"
@@ -71,7 +71,6 @@ def scan_football_radar():
     raw_teams = os.environ.get("TEAMS_LIST", "")
     teams = clean_teams_list(raw_teams) if raw_teams else []
     
-    # Questo ti permette di vedere nel log di GitHub quali squadre sta effettivamente scansionando
     log_info(f"Squadre rilevate nel palinsesto dopo la pulizia: {len(teams)}")
     print(teams)
     
@@ -91,10 +90,8 @@ def scan_football_radar():
                 'title': titolo_ita, 
                 'link': article['link']
             })
-            # Pausa di sicurezza per non far arrabbiare il traduttore di Google
             time.sleep(0.5) 
             
-        # Pausa tra una squadra e l'altra per non fare richieste troppo frenetiche
         time.sleep(1.5)
         
     with open('crisis_report.json', 'w', encoding='utf-8') as f:
