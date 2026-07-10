@@ -17,34 +17,42 @@ def clean_teams_list(raw_input):
     cleaned_teams = set()
     for line in lines:
         line = line.strip()
-        if not line or ":" in line or re.search(r'\d{1,2}:\d{2}', line) or len(line) <= 2: continue
         
+        # 1. Salta righe vuote o troppo corte
+        if not line or len(line) <= 2: continue
+        
+        # 2. Salta gli orari (es. 15:30) o punteggi con i due punti
+        if ":" in line or re.search(r'\d{1,2}:\d{2}', line): continue
+        
+        # 3. FIX: Salta quote o numeri decimali (es. 1.03, 2.5, 12.0)
+        if re.search(r'^\d+[\.,]\d+$', line) or line.replace(".", "").replace(",", "").isdigit(): continue
+        
+        # 4. Salta parole chiave di disturbo
         if any(ignore_word.lower() in line.lower() for ignore_word in elementi_da_ignorare):
             continue
 
         nome = line
-        for r in rimozioni: 
+        for r in rimovizioni: 
             nome = re.sub(r, '', nome, flags=re.IGNORECASE)
         
         nome = nome.strip()
+        # Un ulteriore controllo per essere sicuri che non sia rimasto un numero puro
         if len(nome) > 2 and not nome.replace(" ", "").isdigit(): 
             cleaned_teams.add(nome)
             
     return sorted(list(cleaned_teams))
 
 def chiedi_a_gemini(team_name, api_key):
-    # Chiama l'API ufficiale di Gemini 1.5 Flash
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    # CORREZIONE URL: Usiamo la versione v1 stabile per evitare il 404
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
     
-    # Questo è l'ordine (prompt) che diamo a Gemini per ogni squadra
     prompt = f"""
-Sei un analista calcistico. Usa Google Search per cercare in rete le notizie di CALCIO degli ultimi 2 giorni riguardanti la squadra "{team_name}".
-Regola 1: IGNORA categoricamente le notizie che non parlano di sport (es. incidenti nella città, politica locale).
-Regola 2: Fai un riassunto in italiano di un paio di frasi delle notizie sportive che hai trovato.
-Regola 3: Se non trovi nessuna notizia calcistica su questa squadra in particolare negli ultimi 2 giorni, rispondi SOLO ed ESATTAMENTE con la parola "NESSUNA_NOTIZIA".
+Sei un analista calcistico professionale. Usa Google Search per cercare in rete le notizie di CALCIO degli ultimi 2 giorni riguardanti la squadra "{team_name}".
+Regola 1: IGNORA le notizie non sportive (incidenti, politica locale).
+Regola 2: Fai un brevissimo riassunto in italiano (massimo 2 frasi) di quello che sta succedendo.
+Regola 3: Se non trovi nessuna notizia calcistica recente su questa specifica squadra, rispondi SOLO ed ESATTAMENTE con la parola "NESSUNA_NOTIZIA".
 """
     
-    # Abilitiamo lo strumento "google_search" per permettere a Gemini di navigare su Internet in tempo reale
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "tools": [{"google_search": {}}],
@@ -59,10 +67,9 @@ Regola 3: Se non trovi nessuna notizia calcistica su questa squadra in particola
             risposta_json = json.loads(response.read().decode('utf-8'))
             testo = risposta_json['candidates'][0]['content']['parts'][0]['text']
             
-            # Creiamo un link generico per permetterti di approfondire la ricerca
             link_ricerca = f"https://www.google.com/search?q={urllib.parse.quote(team_name + ' football news')}"
             
-            return testo.strip(), link_ricerca
+            return testo.strip(), link_ricregex
     except Exception as e:
         print(f"    [!] Errore connessione Gemini per {team_name}: {e}")
         return "NESSUNA_NOTIZIA", ""
@@ -76,7 +83,9 @@ def scan_football_radar():
     raw_teams = os.environ.get("TEAMS_LIST", "")
     teams = clean_teams_list(raw_teams) if raw_teams else []
     
-    log_info(f"Squadre trovate nel palinsesto dopo la pulizia: {len(teams)}")
+    # Vedrai subito nei log se il filtro ha ripulito le quote!
+    log_info(f"Squadre reali trovate dopo aver rimosso le quote: {len(teams)}")
+    print(teams)
     
     report = {"last_check": datetime.now().strftime("%d/%m/%Y %H:%M:%S"), "events": []}
     
@@ -84,7 +93,7 @@ def scan_football_radar():
         log_info(f"Chiedo a Gemini di cercare notizie calcistiche per: {team}...")
         testo_notizia, link = chiedi_a_gemini(team, api_key)
         
-        if "NESSUNA_NOTIZIA" not in testo_notizia:
+        if "NESSUNA_NOTIZIA" not in testo_notizia and len(testo_notizia) > 5:
             report["events"].append({
                 'team': team, 
                 'title': testo_notizia, 
@@ -94,7 +103,7 @@ def scan_football_radar():
         else:
             print(f"    Nessuna notizia calcistica trovata per {team}.")
             
-        # Pausa obbligatoria di 5 secondi per non superare il limite gratuito di richieste di Gemini
+        # Pausa di 5 secondi per rispettare i limiti gratuiti delle API di Google
         time.sleep(5) 
         
     with open('crisis_report.json', 'w', encoding='utf-8') as f:
