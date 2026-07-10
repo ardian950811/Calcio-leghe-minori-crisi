@@ -24,7 +24,7 @@ def clean_teams_list(raw_input):
         # 2. Salta gli orari (es. 15:30) o punteggi con i due punti
         if ":" in line or re.search(r'\d{1,2}:\d{2}', line): continue
         
-        # 3. FIX: Salta quote o numeri decimali (es. 1.03, 2.5, 12.0)
+        # 3. Salta quote o numeri decimali (es. 1.03, 2.5, 12.0)
         if re.search(r'^\d+[\.,]\d+$', line) or line.replace(".", "").replace(",", "").isdigit(): continue
         
         # 4. Salta parole chiave di disturbo
@@ -32,20 +32,18 @@ def clean_teams_list(raw_input):
             continue
 
         nome = line
-        # CORRETTO L'ERRORE DI BATTITURA QUI SOTTO
         for r in rimozioni: 
             nome = re.sub(r, '', nome, flags=re.IGNORECASE)
         
         nome = nome.strip()
-        # Un ulteriore controllo per essere sicuri che non sia rimasto un numero puro
         if len(nome) > 2 and not nome.replace(" ", "").isdigit(): 
             cleaned_teams.add(nome)
             
     return sorted(list(cleaned_teams))
 
 def chiedi_a_gemini(team_name, api_key):
-    # CORREZIONE URL: Usiamo la versione v1 stabile per evitare il 404
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
+    # CORREZIONE 1: Usiamo v1beta che supporta attivamente il motore di ricerca
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     prompt = f"""
 Sei un analista calcistico professionale. Usa Google Search per cercare in rete le notizie di CALCIO degli ultimi 2 giorni riguardanti la squadra "{team_name}".
@@ -54,9 +52,10 @@ Regola 2: Fai un brevissimo riassunto in italiano (massimo 2 frasi) di quello ch
 Regola 3: Se non trovi nessuna notizia calcistica recente su questa specifica squadra, rispondi SOLO ed ESATTAMENTE con la parola "NESSUNA_NOTIZIA".
 """
     
+    # CORREZIONE 2: La sintassi esatta pretesa da Google è "googleSearch" e non "google_search"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "tools": [{"google_search": {}}],
+        "tools": [{"googleSearch": {}}],
         "generationConfig": {"temperature": 0.2}
     }
     
@@ -70,7 +69,6 @@ Regola 3: Se non trovi nessuna notizia calcistica recente su questa specifica sq
             
             link_ricerca = f"https://www.google.com/search?q={urllib.parse.quote(team_name + ' football news')}"
             
-            # CORRETTO IL REFUSO QUI SOTTO
             return testo.strip(), link_ricerca
     except Exception as e:
         print(f"    [!] Errore connessione Gemini per {team_name}: {e}")
@@ -85,7 +83,6 @@ def scan_football_radar():
     raw_teams = os.environ.get("TEAMS_LIST", "")
     teams = clean_teams_list(raw_teams) if raw_teams else []
     
-    # Vedrai subito nei log se il filtro ha ripulito le quote!
     log_info(f"Squadre reali trovate dopo aver rimosso le quote: {len(teams)}")
     print(teams)
     
