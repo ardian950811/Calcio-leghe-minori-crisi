@@ -2,25 +2,12 @@ import os
 import json
 import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ET
 from datetime import datetime
 import time
 import re
 
 def log_info(message): print(f"[*] {message}")
 def log_success(message): print(f"[+] {message}")
-
-# --- Traduttore Automatico in Italiano ---
-def traduci_in_italiano(testo):
-    try:
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=it&dt=t&q={urllib.parse.quote(testo)}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=5) as response:
-            data = json.loads(response.read().decode('utf-8'))
-            return data[0][0][0]
-    except Exception as e:
-        print(f"    [!] Errore di traduzione (forse troppe richieste): {e}")
-        return testo 
 
 def clean_teams_list(raw_input):
     elementi_da_ignorare = ["diretta", "risultati", "aiscore", "scarica", "pallacanestro", "tennis", "live", "sospesa", "punteggio"]
@@ -45,59 +32,75 @@ def clean_teams_list(raw_input):
             
     return sorted(list(cleaned_teams))
 
-def fetch_all_news(team_name):
-    # FIX: Nome tra virgolette assolute per forzare l'esattezza e filtro rigoroso per sport estero
-    query = f'"{team_name}" AND (football OR soccer) when:2d'
+def chiedi_a_gemini(team_name, api_key):
+    # Chiama l'API ufficiale di Gemini 1.5 Flash
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
-    encoded_query = urllib.parse.quote(query)
-    url = f"https://news.google.com/rss/search?q={encoded_query}"
+    # Questo è l'ordine (prompt) che diamo a Gemini per ogni squadra
+    prompt = f"""
+Sei un analista calcistico. Usa Google Search per cercare in rete le notizie di CALCIO degli ultimi 2 giorni riguardanti la squadra "{team_name}".
+Regola 1: IGNORA categoricamente le notizie che non parlano di sport (es. incidenti nella città, politica locale).
+Regola 2: Fai un riassunto in italiano di un paio di frasi delle notizie sportive che hai trovato.
+Regola 3: Se non trovi nessuna notizia calcistica su questa squadra in particolare negli ultimi 2 giorni, rispondi SOLO ed ESATTAMENTE con la parola "NESSUNA_NOTIZIA".
+"""
     
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    # Abilitiamo lo strumento "google_search" per permettere a Gemini di navigare su Internet in tempo reale
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "tools": [{"google_search": {}}],
+        "generationConfig": {"temperature": 0.2}
+    }
+    
+    data = json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+    
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            root = ET.fromstring(response.read())
-            articles = []
-            for item in root.findall('.//item'):
-                articles.append({
-                    'title': item.find('title').text,
-                    'link': item.find('link').text
-                })
-            return articles
-    except Exception as e: 
-        print(f"    [!] Errore lettura Google News per {team_name}: {e}")
-        return []
+        with urllib.request.urlopen(req, timeout=30) as response:
+            risposta_json = json.loads(response.read().decode('utf-8'))
+            testo = risposta_json['candidates'][0]['content']['parts'][0]['text']
+            
+            # Creiamo un link generico per permetterti di approfondire la ricerca
+            link_ricerca = f"https://www.google.com/search?q={urllib.parse.quote(team_name + ' football news')}"
+            
+            return testo.strip(), link_ricerca
+    except Exception as e:
+        print(f"    [!] Errore connessione Gemini per {team_name}: {e}")
+        return "NESSUNA_NOTIZIA", ""
 
 def scan_football_radar():
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        print("[!] ERRORE: GEMINI_API_KEY non trovata su GitHub Secrets!")
+        return
+
     raw_teams = os.environ.get("TEAMS_LIST", "")
     teams = clean_teams_list(raw_teams) if raw_teams else []
     
-    log_info(f"Squadre rilevate nel palinsesto dopo la pulizia: {len(teams)}")
-    print(teams)
+    log_info(f"Squadre trovate nel palinsesto dopo la pulizia: {len(teams)}")
     
     report = {"last_check": datetime.now().strftime("%d/%m/%Y %H:%M:%S"), "events": []}
     
     for team in teams:
-        log_info(f"Monitoro tutte le notizie di: {team}")
-        news = fetch_all_news(team)
+        log_info(f"Chiedo a Gemini di cercare notizie calcistiche per: {team}...")
+        testo_notizia, link = chiedi_a_gemini(team, api_key)
         
-        if not news:
-            print("    Nessuna notizia trovata nelle ultime 48 ore.")
-            
-        for article in news:
-            titolo_ita = traduci_in_italiano(article['title'])
+        if "NESSUNA_NOTIZIA" not in testo_notizia:
             report["events"].append({
                 'team': team, 
-                'title': titolo_ita, 
-                'link': article['link']
+                'title': testo_notizia, 
+                'link': link
             })
-            time.sleep(0.5) 
+            log_success(f"Notizia inserita per {team}!")
+        else:
+            print(f"    Nessuna notizia calcistica trovata per {team}.")
             
-        time.sleep(1.5)
+        # Pausa obbligatoria di 5 secondi per non superare il limite gratuito di richieste di Gemini
+        time.sleep(5) 
         
     with open('crisis_report.json', 'w', encoding='utf-8') as f:
         json.dump(report, f, ensure_ascii=False, indent=4)
         
-    log_success(f"Monitoraggio completato. Trovate {len(report['events'])} notizie totali.")
+    log_success(f"Analisi Gemini completata. Trovate notizie per {len(report['events'])} squadre.")
 
 if __name__ == "__main__":
     scan_football_radar()
