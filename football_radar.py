@@ -32,7 +32,8 @@ def clean_teams_list(raw_input):
             continue
 
         nome = line
-        for r in rimovizioni: 
+        # CORRETTO L'ERRORE DI BATTITURA QUI SOTTO
+        for r in rimozioni: 
             nome = re.sub(r, '', nome, flags=re.IGNORECASE)
         
         nome = nome.strip()
@@ -69,7 +70,8 @@ Regola 3: Se non trovi nessuna notizia calcistica recente su questa specifica sq
             
             link_ricerca = f"https://www.google.com/search?q={urllib.parse.quote(team_name + ' football news')}"
             
-            return testo.strip(), link_ricregex
+            # CORRETTO IL REFUSO QUI SOTTO
+            return testo.strip(), link_ricerca
     except Exception as e:
         print(f"    [!] Errore connessione Gemini per {team_name}: {e}")
         return "NESSUNA_NOTIZIA", ""
